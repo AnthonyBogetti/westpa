@@ -139,10 +139,12 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     return output
 
 
-def get_final(coords, allcoords, mask, ndim):
+def get_final(coords, mask, ndim):
     """
     Determine which segments are "final".
     """
+
+    allcoords = np.copy(coords)
 
     if coords.shape[1] > ndim:
 
@@ -223,7 +225,7 @@ def generate_mab_bins(coords, mask, output, *args, **kwargs):
     # the segments should be sent in by the driver as half initial segments and half final segments
     # allcoords contains all segments
     # coords should contain ONLY final segments
-    coords, weights, mask, splitting, isfinal = get_final(coords, allcoords, mask, ndim)
+    coords, weights, mask, splitting, isfinal = get_final(coords, mask, ndim)
 
     # in case where there is no final segments but initial ones in range
     if not np.any(mask):
