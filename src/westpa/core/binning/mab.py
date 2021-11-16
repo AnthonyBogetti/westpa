@@ -81,7 +81,7 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
 
     allcoords = np.copy(coords)
 
-    ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal = mab_parameters
+    ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist = mab_parameters
 
     coords, weights, mask, splitting, isfinal = get_final(coords, mask, ndim)
 
@@ -321,7 +321,7 @@ def generate_mab_bins(coords, mask, output, *args, **kwargs):
                     flipdifflist[n] = fliptemp[i][0]
                     flipmaxdiff = flipdiff
 
-    return ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal
+    return ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist
 
 
 class MABBinMapper(FuncBinMapper):
