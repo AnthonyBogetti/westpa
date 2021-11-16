@@ -1,8 +1,9 @@
 import numpy as np
 from westpa.core.binning import FuncBinMapper
+from westpa.core.binning.assign import index_dtype
 
 
-def map_mab(coords, mask, output, *args, **kwargs):
+def map_mab(coords, mask, output, assign_coords=None, *args, **kwargs):
     """
     Binning which adaptively places bins based on the positions of extrema segments and
     bottleneck segments, which are where the difference in probability is the greatest
@@ -22,6 +23,9 @@ def map_mab(coords, mask, output, *args, **kwargs):
     output: array-like
         Array to populate with the mapped WE bins.
 
+    assign_coords: array-like, optional (default: None)
+        An optional set of coordinates to assign, based on MAB parameters calculated from :code:`coords`.
+
     nbins_per_dim: array-like
         Array storing the number of WE bins to place in each dimension.
 
@@ -36,10 +40,22 @@ def map_mab(coords, mask, output, *args, **kwargs):
     array-like: The WE bin assignments for each segment.
     """
 
+    # If you provided a different set of coordinates to assign, then build a new mask based on that.
+    if assign_coords is not None:
+        assign_mask = np.ones((len(assign_coords),), dtype=np.bool_)
+        assign_output = np.empty((len(assign_coords),), dtype=index_dtype)
+
+    # If assign_coords is not provided, then this should default to the original behavior and just assign the segments
+    #   that were initially provided
+    else:
+        assign_coords = coords
+        assign_mask = mask
+        assign_output = output
+
     mab_parameters = generate_mab_bins(coords, mask, output, *args, **kwargs)
 
     # coords, mask, output may be a different size here
-    assignments = assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs)
+    assignments = assign_to_mab_bins(assign_coords, mab_parameters, assign_mask, assign_output, *args, **kwargs)
 
     return assignments
 
