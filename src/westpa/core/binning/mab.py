@@ -3,7 +3,136 @@ from westpa.core.binning import FuncBinMapper
 
 
 def map_mab(coords, mask, output, *args, **kwargs):
-    '''Binning which adaptively places bins based on the positions of extrema segments and
+    """
+    Construct a set of WE bins according to the MAB scheme.
+
+    Adaptively places bins based on the positions of extrema segments and bottleneck segments, which are where the
+    difference in probability is the greatest along the progress coordinate.
+    Operates per dimension and places a fixed number of evenly spaced bins between the segments with the min and max
+    pcoord values. Extrema and bottleneck segments are assigned their own bins.
+
+    Parameters
+    ----------
+    coords
+    mask
+    output
+    args
+    kwargs
+
+    Returns
+    -------
+    array-like: The WE bin assignments for each segment.
+    """
+
+    mab_parameters = generate_mab_bins(coords, mask, output, *args, **kwargs)
+
+    assignments = assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs)
+
+    return assignments
+
+
+def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
+    """
+    Given a set of parameters for the MAB scheme, assign coordinates to bins.
+
+    Parameters
+    ----------
+    coords
+    mab_parameters
+    mask
+    output
+
+    Returns
+    -------
+    array-like: The WE bin assignments for each segment.
+    """
+
+    allcoords = np.copy(coords)
+    allmask = np.copy(mask)
+
+    splitting, ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal = mab_parameters
+
+    # The base number of bins is the total number of linear bins + 2 boundary bins in each dim
+    boundary_base = np.prod(nbins_per_dim)
+    bottleneck_base = boundary_base + 2 * ndim
+
+    # Iterate over segments and assign them to bins (if their mask is True)
+    for i in range(len(output)):
+
+        # If this segment isn't to be assigned, move on
+        if not allmask[i]:
+            continue
+
+        special = False
+        holder = 0
+        if splitting:
+
+            # For this segment, go through each dimension
+            for n in range(ndim):
+                coord = allcoords[i][n]
+
+                # Handle binning bottleneck segments
+                if bottleneck:
+
+                    # If this is the coordinate with the smallest relative log-weight in this dimension, then mark it,
+                    #   and store the bin
+                    if coord == difflist[n]:
+                        # Holder stores the bin index
+                        holder = bottleneck_base + 2 * n
+                        # This is True for extrema / bottlenecks
+                        special = True
+                        break
+                    elif coord == flipdifflist[n]:
+                        holder = bottleneck_base + 2 * n + 1
+                        special = True
+                        break
+
+                # Handle binning extrema
+                if coord == minlist[n]:
+                    holder = boundary_base + 2 * n
+                    special = True
+                    break
+                elif coord == maxlist[n]:
+                    holder = boundary_base + 2 * n + 1
+                    special = True
+                    break
+
+        # If this segment is neither a bottleneck or an extremum, then bin it in linear bins
+        if not special:
+
+            for n in range(ndim):
+                coord = allcoords[i][n]
+                nbins = nbins_per_dim[n]
+                minp = minlist[n]
+                maxp = maxlist[n]
+
+                # Linearly chop up the space between the minimum and maximum coordinates in this set, and assign
+                bins = np.linspace(minp, maxp, nbins + 1)
+                bin_number = np.digitize(coord, bins) - 1
+
+                # If these are all initial segments and there are no final segments
+                if isfinal is None or not isfinal[i]:
+                    # Equivalently, bin_number = np.clip(bin_number, 0, nbins-1)
+                    if bin_number >= nbins:
+                        bin_number = nbins - 1
+                    elif bin_number < 0:
+                        bin_number = 0
+
+                elif bin_number >= nbins or bin_number < 0:
+                    raise ValueError("Walker out of boundary")
+
+                # The bin-index is a scalar, so update it given the number of bins in each dimension
+                holder += bin_number * np.prod(nbins_per_dim[:n])
+
+        # Store the bin assignment
+        output[i] = holder
+
+    return output
+
+
+def generate_mab_bins(coords, mask, output, *args, **kwargs):
+    """
+    Binning which adaptively places bins based on the positions of extrema segments and
     bottleneck segments, which are where the difference in probability is the greatest
     along the progress coordinate. Operates per dimension and places a fixed number of
     evenly spaced bins between the segments with the min and max pcoord values. Extrema and
@@ -28,12 +157,12 @@ def map_mab(coords, mask, output, *args, **kwargs):
         Whether to run PCA on the components before assignment.
 
     bottleneck: boolean, optional (default: True)
-
+        Whether to bin bottleneck segments.
 
     Returns
     -------
-    array-like: The assigned bins for each segment
-    '''
+    MAB parameters: (splitting, ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal)
+    """
 
     pca = kwargs.pop("pca", False)
     bottleneck = kwargs.pop("bottleneck", True)
@@ -173,82 +302,7 @@ def map_mab(coords, mask, output, *args, **kwargs):
                     flipdifflist[n] = fliptemp[i][0]
                     flipmaxdiff = flipdiff
 
-    # The base number of bins is the total number of linear bins + 2 boundary bins in each dim
-    boundary_base = np.prod(nbins_per_dim)
-    bottleneck_base = boundary_base + 2 * ndim
-
-    # Iterate over segments and assign them to bins (if their mask is True)
-    for i in range(len(output)):
-
-        # If this segment isn't to be assigned, move on
-        if not allmask[i]:
-            continue
-
-        special = False
-        holder = 0
-        if splitting:
-
-            # For this segment, go through each dimension
-            for n in range(ndim):
-                coord = allcoords[i][n]
-
-                # Handle binning bottleneck segments
-                if bottleneck:
-
-                    # If this is the coordinate with the smallest relative log-weight in this dimension, then mark it,
-                    #   and store the bin
-                    if coord == difflist[n]:
-                        # Holder stores the bin index
-                        holder = bottleneck_base + 2 * n
-                        # This is True for extrema / bottlenecks
-                        special = True
-                        break
-                    elif coord == flipdifflist[n]:
-                        holder = bottleneck_base + 2 * n + 1
-                        special = True
-                        break
-
-                # Handle binning extrema
-                if coord == minlist[n]:
-                    holder = boundary_base + 2 * n
-                    special = True
-                    break
-                elif coord == maxlist[n]:
-                    holder = boundary_base + 2 * n + 1
-                    special = True
-                    break
-
-        # If this segment is neither a bottleneck or an extremum, then bin it in linear bins
-        if not special:
-
-            for n in range(ndim):
-                coord = allcoords[i][n]
-                nbins = nbins_per_dim[n]
-                minp = minlist[n]
-                maxp = maxlist[n]
-
-                # Linearly chop up the space between the minimum and maximum coordinates in this set, and assign
-                bins = np.linspace(minp, maxp, nbins + 1)
-                bin_number = np.digitize(coord, bins) - 1
-
-                # If these are all initial segments and there are no final segments
-                if isfinal is None or not isfinal[i]:
-                    # Equivalently, bin_number = np.clip(bin_number, 0, nbins-1)
-                    if bin_number >= nbins:
-                        bin_number = nbins - 1
-                    elif bin_number < 0:
-                        bin_number = 0
-
-                elif bin_number >= nbins or bin_number < 0:
-                    raise ValueError("Walker out of boundary")
-
-                # The bin-index is a scalar, so update it given the number of bins in each dimension
-                holder += bin_number * np.prod(nbins_per_dim[:n])
-
-        # Store the bin assignment
-        output[i] = holder
-
-    return output
+    return splitting, ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal
 
 
 class MABBinMapper(FuncBinMapper):
