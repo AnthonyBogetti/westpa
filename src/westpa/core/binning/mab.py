@@ -24,8 +24,12 @@ def map_mab(coords, mask, output, *args, **kwargs):
     array-like: The WE bin assignments for each segment.
     """
 
+    # TODO: Output here needs to match the size of the coordinates you're building the bins on
+    # TODO: Mask, same deal
     mab_parameters = generate_mab_bins(coords, mask, output, *args, **kwargs)
 
+    # TODO: Output here needs to match the size of the coordinates you're assigning to
+    # TODO: Mask, same deal
     assignments = assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs)
 
     return assignments
@@ -46,6 +50,11 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     -------
     array-like: The WE bin assignments for each segment.
     """
+
+    #### Things where size matters, and I can't reuse from the generate_bins:
+    # - isfinal
+    # - output
+    # - mask
 
     allcoords = np.copy(coords)
     allmask = np.copy(mask)
@@ -130,6 +139,38 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     return output
 
 
+def get_final(coords, allcoords, mask, ndim):
+    """
+    Determine which segments are "final".
+    """
+
+    if coords.shape[1] > ndim:
+
+        # If there's an extra dimension, then we've gotten the segment weights from the MAB driver.
+        if coords.shape[1] > ndim + 1:
+
+            # This last index is 1 if it's a final segment, or 0 otherwise, so cast that to a boolean.
+            isfinal = allcoords[:, ndim + 1].astype(np.bool_)
+
+        # This else is equivalent to `if coords.shape[1] == ndim + 1`.
+        # If that's the case, then we're missing either segment weights or the boolean indicating whether they're final,
+        #   which means they're all final coordinates. (Why? When would this happen?)
+        else:
+            # They're all final coordinates
+            isfinal = np.ones(coords.shape[0], dtype=np.bool_)
+
+        # Set coords to hold only the pcoords of the final segments
+        coords = coords[isfinal, :ndim]
+        # Weights holds the segment weights of the final segments
+        weights = allcoords[isfinal, ndim + 0]
+        # Only select out the elements of the mask corresponding to final segments
+        mask = mask[isfinal]
+
+        splitting = True
+
+        return coords, weights, mask, splitting, isfinal
+
+
 def generate_mab_bins(coords, mask, output, *args, **kwargs):
     """
     Binning which adaptively places bins based on the positions of extrema segments and
@@ -182,29 +223,7 @@ def generate_mab_bins(coords, mask, output, *args, **kwargs):
     # the segments should be sent in by the driver as half initial segments and half final segments
     # allcoords contains all segments
     # coords should contain ONLY final segments
-    if coords.shape[1] > ndim:
-
-        # If there's an extra dimension, then we've gotten the segment weights from the MAB driver.
-        if coords.shape[1] > ndim + 1:
-
-            # This last index is 1 if it's a final segment, or 0 otherwise, so cast that to a boolean.
-            isfinal = allcoords[:, ndim + 1].astype(np.bool_)
-
-        # This else is equivalent to `if coords.shape[1] == ndim + 1`.
-        # If that's the case, then we're missing either segment weights or the boolean indicating whether they're final,
-        #   which means they're all final coordinates. (Why? When would this happen?)
-        else:
-            # They're all final coordinates
-            isfinal = np.ones(coords.shape[0], dtype=np.bool_)
-
-        # Set coords to hold only the pcoords of the final segments
-        coords = coords[isfinal, :ndim]
-        # Weights holds the segment weights of the final segments
-        weights = allcoords[isfinal, ndim + 0]
-        # Only select out the elements of the mask corresponding to final segments
-        mask = mask[isfinal]
-
-        splitting = True
+    coords, weights, mask, splitting, isfinal = get_final(coords, allcoords, mask, ndim)
 
     # in case where there is no final segments but initial ones in range
     if not np.any(mask):
