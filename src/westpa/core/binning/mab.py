@@ -3,7 +3,7 @@ from westpa.core.binning import FuncBinMapper
 from westpa.core.binning.assign import index_dtype
 
 
-def map_mab(coords, mask, output, assign_coords=None, *args, **kwargs):
+def map_mab(coords, mask, output, *args, assign_coords=None, **kwargs):
     """
     Binning which adaptively places bins based on the positions of extrema segments and
     bottleneck segments, which are where the difference in probability is the greatest
