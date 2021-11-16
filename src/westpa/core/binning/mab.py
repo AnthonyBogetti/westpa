@@ -4,32 +4,41 @@ from westpa.core.binning import FuncBinMapper
 
 def map_mab(coords, mask, output, *args, **kwargs):
     """
-    Construct a set of WE bins according to the MAB scheme.
-
-    Adaptively places bins based on the positions of extrema segments and bottleneck segments, which are where the
-    difference in probability is the greatest along the progress coordinate.
-    Operates per dimension and places a fixed number of evenly spaced bins between the segments with the min and max
-    pcoord values. Extrema and bottleneck segments are assigned their own bins.
+    Binning which adaptively places bins based on the positions of extrema segments and
+    bottleneck segments, which are where the difference in probability is the greatest
+    along the progress coordinate. Operates per dimension and places a fixed number of
+    evenly spaced bins between the segments with the min and max pcoord values. Extrema and
+    bottleneck segments are assigned their own bins.
 
     Parameters
     ----------
-    coords
-    mask
-    output
-    args
-    kwargs
+    coords: array-like
+        Set of coordinates to map to WE bins. Shape is (n_segments, n_dimensions + 1), where the extra dimension is
+        a boolean indicating whether it's a final segment or not.
+
+    mask: array-like
+        A mask indicating which coordinates to assign bins to.
+
+    output: array-like
+        Array to populate with the mapped WE bins.
+
+    nbins_per_dim: array-like
+        Array storing the number of WE bins to place in each dimension.
+
+    pca: boolean, optional (default: False)
+        Whether to run PCA on the components before assignment.
+
+    bottleneck: boolean, optional (default: True)
+        Whether to bin bottleneck segments.
 
     Returns
     -------
     array-like: The WE bin assignments for each segment.
     """
 
-    # TODO: Output here needs to match the size of the coordinates you're building the bins on
-    # TODO: Mask, same deal
     mab_parameters = generate_mab_bins(coords, mask, output, *args, **kwargs)
 
-    # TODO: Output here needs to match the size of the coordinates you're assigning to
-    # TODO: Mask, same deal
+    # coords, mask, output may be a different size here
     assignments = assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs)
 
     return assignments
@@ -51,15 +60,14 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     array-like: The WE bin assignments for each segment.
     """
 
-    #### Things where size matters, and I can't reuse from the generate_bins:
-    # - isfinal
-    # - output
-    # - mask
+    # isfinal, output, and mask cannot be copied over through the parameters, as you may want to use one set of data
+    #   to generate the MAB parameters, and then apply that to another set of data.
 
     allcoords = np.copy(coords)
-    allmask = np.copy(mask)
 
-    splitting, ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal = mab_parameters
+    ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal = mab_parameters
+
+    coords, weights, mask, splitting, isfinal = get_final(coords, mask, ndim)
 
     # The base number of bins is the total number of linear bins + 2 boundary bins in each dim
     boundary_base = np.prod(nbins_per_dim)
@@ -69,7 +77,7 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     for i in range(len(output)):
 
         # If this segment isn't to be assigned, move on
-        if not allmask[i]:
+        if not mask[i]:
             continue
 
         special = False
@@ -145,6 +153,7 @@ def get_final(coords, mask, ndim):
     """
 
     allcoords = np.copy(coords)
+    allmask = np.copy(mask)
 
     if coords.shape[1] > ndim:
 
@@ -170,37 +179,24 @@ def get_final(coords, mask, ndim):
 
         splitting = True
 
+        # in case where there is no final segments but initial ones in range
+        if not np.any(mask):
+            coords = allcoords[:, :ndim]
+            mask = allmask
+            weights = None
+            splitting = False
+
         return coords, weights, mask, splitting, isfinal
 
 
 def generate_mab_bins(coords, mask, output, *args, **kwargs):
     """
-    Binning which adaptively places bins based on the positions of extrema segments and
-    bottleneck segments, which are where the difference in probability is the greatest
-    along the progress coordinate. Operates per dimension and places a fixed number of
-    evenly spaced bins between the segments with the min and max pcoord values. Extrema and
-    bottleneck segments are assigned their own bins.
+    Construct a set of WE bins according to the MAB scheme.
 
-    Parameters
-    ----------
-    coords: array-like
-        Set of coordinates to map to WE bins. Shape is (n_segments, n_dimensions + 1), where the extra dimension is
-        a boolean indicating whether it's a final segment or not.
-
-    mask: array-like
-        A mask indicating which coordinates to assign bins to.
-
-    output: array-like
-        Array to populate with the mapped WE bins.
-
-    nbins_per_dim: array-like
-        Array storing the number of WE bins to place in each dimension.
-
-    pca: boolean, optional (default: False)
-        Whether to run PCA on the components before assignment.
-
-    bottleneck: boolean, optional (default: True)
-        Whether to bin bottleneck segments.
+    Adaptively places bins based on the positions of extrema segments and bottleneck segments, which are where the
+    difference in probability is the greatest along the progress coordinate.
+    Operates per dimension and places a fixed number of evenly spaced bins between the segments with the min and max
+    pcoord values. Extrema and bottleneck segments are assigned their own bins.
 
     Returns
     -------
@@ -215,24 +211,10 @@ def generate_mab_bins(coords, mask, output, *args, **kwargs):
     if not np.any(mask):
         return output
 
-    allcoords = np.copy(coords)
-    allmask = np.copy(mask)
-
-    weights = None
-    isfinal = None
-    splitting = False
-
     # the segments should be sent in by the driver as half initial segments and half final segments
     # allcoords contains all segments
     # coords should contain ONLY final segments
     coords, weights, mask, splitting, isfinal = get_final(coords, mask, ndim)
-
-    # in case where there is no final segments but initial ones in range
-    if not np.any(mask):
-        coords = allcoords[:, :ndim]
-        mask = allmask
-        weights = None
-        splitting = False
 
     # If PCA is enabled, then do PCA on the coordinates before assignment
     varcoords = np.copy(coords)
@@ -323,7 +305,7 @@ def generate_mab_bins(coords, mask, output, *args, **kwargs):
                     flipdifflist[n] = fliptemp[i][0]
                     flipmaxdiff = flipdiff
 
-    return splitting, ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal
+    return ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist, isfinal
 
 
 class MABBinMapper(FuncBinMapper):
