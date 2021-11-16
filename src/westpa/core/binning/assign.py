@@ -223,7 +223,8 @@ class FuncBinMapper(BinMapper):
         self.kwargs = kwargs or {}
         self.labels = ['{!r} bin {:d}'.format(func, ibin) for ibin in range(nbins)]
 
-    def assign(self, coords, mask=None, output=None):
+    def assign(self, coords, mask=None, output=None, **kwargs):
+
         try:
             passed_coord_dtype = coords.dtype
         except AttributeError:
@@ -244,7 +245,8 @@ class FuncBinMapper(BinMapper):
         elif len(output) != len(coords):
             raise TypeError('output has different length than coords')
 
-        self.func(coords, mask, output, *self.args, **self.kwargs)
+        kwargs.update(self.kwargs)
+        self.func(coords, mask, output, *self.args, **kwargs)
 
         return output
 
