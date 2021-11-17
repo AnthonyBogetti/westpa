@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 class MABDriver(WEDriver):
-    def assign(self, segments, initializing=False, **kwargs):
+    def assign(self, segments, initializing=False):
         '''
         Assign segments to initial and final bins, and update the (internal) lists of used and available
         initial states.
@@ -27,7 +27,7 @@ class MABDriver(WEDriver):
             all_pcoords[n_segments + iseg] = np.append(segment.pcoord[-1, :], [segment.weight, 1.0])
 
         # assign based on initial and final progress coordinates
-        assignments = self.bin_mapper.assign(all_pcoords, **kwargs)
+        assignments = self.bin_mapper.assign(all_pcoords)
         initial_assignments = assignments[:n_segments]
         if initializing:
             final_assignments = initial_assignments
