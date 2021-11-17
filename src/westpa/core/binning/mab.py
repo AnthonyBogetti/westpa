@@ -3,7 +3,7 @@ from westpa.core.binning import FuncBinMapper
 from westpa.core.binning.assign import index_dtype
 
 
-def map_mab(coords, mask, output, *args, assign_coords=None, **kwargs):
+def map_mab(coords, mask, output, *args, model_coords=None, **kwargs):
     """
     Binning which adaptively places bins based on the positions of extrema segments and
     bottleneck segments, which are where the difference in probability is the greatest
@@ -23,8 +23,9 @@ def map_mab(coords, mask, output, *args, assign_coords=None, **kwargs):
     output: array-like
         Array to populate with the mapped WE bins.
 
-    assign_coords: array-like, optional (default: None)
-        An optional set of coordinates to assign, based on MAB parameters calculated from :code:`coords`.
+    model_coords: array-like, optional (default: None)
+        An optional set of coordinates to use to calculate MAB parameters. If used, :code:`coords` will be binned based
+        on MAB parameters calculated from :code:`assign_coords`.
 
     nbins_per_dim: array-like
         Array storing the number of WE bins to place in each dimension.
@@ -38,24 +39,34 @@ def map_mab(coords, mask, output, *args, assign_coords=None, **kwargs):
     Returns
     -------
     array-like: The WE bin assignments for each segment.
+
+    Notes
+    -----
+    If using :code:`model_coords` to parameterize the MAB based on a different set of coordinates than what you're
+    assigning, be aware that if the coordinates in model_coords span a narrower space than the coordinates to assign,
+    some walkers will end up outside the boundary and an error will be thrown.
     """
 
     # If you provided a different set of coordinates to assign, then build a new mask based on that.
-    if assign_coords is not None:
-        assign_mask = np.ones((len(assign_coords),), dtype=np.bool_)
-        assign_output = np.empty((len(assign_coords),), dtype=index_dtype)
+    if model_coords is not None:
+        assign_mask = np.ones((len(model_coords),), dtype=np.bool_)
+        assign_output = np.empty((len(model_coords),), dtype=index_dtype)
 
     # If assign_coords is not provided, then this should default to the original behavior and just assign the segments
     #   that were initially provided
     else:
-        assign_coords = coords
-        assign_mask = mask
-        assign_output = output
+        model_coords = np.copy(coords)
+        assign_mask = np.copy(mask)
+        assign_output = np.copy(output)
 
-    mab_parameters = generate_mab_bins(coords, mask, output, *args, **kwargs)
+    mab_parameters = generate_mab_bins(model_coords, assign_mask, assign_output, *args, **kwargs)
 
     # coords, mask, output may be a different size here
-    assignments = assign_to_mab_bins(assign_coords, mab_parameters, assign_mask, assign_output, *args, **kwargs)
+    assignments = assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs)
+
+    # Pass the result out
+    for i, element in enumerate(output):
+        output[i] = element
 
     return assignments
 
@@ -80,6 +91,7 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     #   to generate the MAB parameters, and then apply that to another set of data.
 
     allcoords = np.copy(coords)
+    allmask = np.copy(mask)
 
     ndim, bottleneck, nbins_per_dim, difflist, flipdifflist, minlist, maxlist = mab_parameters
 
@@ -93,7 +105,7 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
     for i in range(len(output)):
 
         # If this segment isn't to be assigned, move on
-        if not mask[i]:
+        if not allmask[i]:
             continue
 
         special = False
@@ -151,6 +163,9 @@ def assign_to_mab_bins(coords, mab_parameters, mask, output, *args, **kwargs):
                     elif bin_number < 0:
                         bin_number = 0
 
+                # TODO: This is tripped if you parameterize from an iteration with a narrower range, and then try
+                #   to apply that to an iteration with a wider range of coordinates.
+                #   Would it be acceptable to expand the above 'if' to include this, and not make this an exception?
                 elif bin_number >= nbins or bin_number < 0:
                     raise ValueError("Walker out of boundary")
 
@@ -171,38 +186,41 @@ def get_final(coords, mask, ndim):
     allcoords = np.copy(coords)
     allmask = np.copy(mask)
 
-    if coords.shape[1] > ndim:
+    assert coords.shape[1] > ndim, (
+        f"Provided coordinates not the right shape. Was {coords.shape}, but should have "
+        f"dimension1 > {ndim}. Maybe you forgot to zip the weights and the final boolean?"
+    )
 
-        # If there's an extra dimension, then we've gotten the segment weights from the MAB driver.
-        if coords.shape[1] > ndim + 1:
+    # If there's an extra dimension, then we've gotten the segment weights from the MAB driver.
+    if coords.shape[1] > ndim + 1:
 
-            # This last index is 1 if it's a final segment, or 0 otherwise, so cast that to a boolean.
-            isfinal = allcoords[:, ndim + 1].astype(np.bool_)
+        # This last index is 1 if it's a final segment, or 0 otherwise, so cast that to a boolean.
+        isfinal = allcoords[:, ndim + 1].astype(np.bool_)
 
-        # This else is equivalent to `if coords.shape[1] == ndim + 1`.
-        # If that's the case, then we're missing either segment weights or the boolean indicating whether they're final,
-        #   which means they're all final coordinates. (Why? When would this happen?)
-        else:
-            # They're all final coordinates
-            isfinal = np.ones(coords.shape[0], dtype=np.bool_)
+    # This else is equivalent to `if coords.shape[1] == ndim + 1`.
+    # If that's the case, then we're missing either segment weights or the boolean indicating whether they're final,
+    #   which means they're all final coordinates. (Why? When would this happen?)
+    else:
+        # They're all final coordinates
+        isfinal = np.ones(coords.shape[0], dtype=np.bool_)
 
-        # Set coords to hold only the pcoords of the final segments
-        coords = coords[isfinal, :ndim]
-        # Weights holds the segment weights of the final segments
-        weights = allcoords[isfinal, ndim + 0]
-        # Only select out the elements of the mask corresponding to final segments
-        mask = mask[isfinal]
+    # Set coords to hold only the pcoords of the final segments
+    coords = coords[isfinal, :ndim]
+    # Weights holds the segment weights of the final segments
+    weights = allcoords[isfinal, ndim + 0]
+    # Only select out the elements of the mask corresponding to final segments
+    mask = mask[isfinal]
 
-        splitting = True
+    splitting = True
 
-        # in case where there is no final segments but initial ones in range
-        if not np.any(mask):
-            coords = allcoords[:, :ndim]
-            mask = allmask
-            weights = None
-            splitting = False
+    # in case where there is no final segments but initial ones in range
+    if not np.any(mask):
+        coords = allcoords[:, :ndim]
+        mask = allmask
+        weights = None
+        splitting = False
 
-        return coords, weights, mask, splitting, isfinal
+    return coords, weights, mask, splitting, isfinal
 
 
 def generate_mab_bins(coords, mask, output, *args, **kwargs):
