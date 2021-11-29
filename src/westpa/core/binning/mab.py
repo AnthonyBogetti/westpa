@@ -353,4 +353,8 @@ class MABBinMapper(FuncBinMapper):
         kwargs = dict(nbins_per_dim=nbins, bottleneck=bottleneck, pca=pca)
         ndim = len(nbins)
         n_total_bins = np.prod(nbins) + ndim * (2 + 2 * bottleneck)
+
+        self.nbins_per_dim = nbins
+        self.ndim = ndim
+
         super().__init__(map_mab, n_total_bins, kwargs=kwargs)
