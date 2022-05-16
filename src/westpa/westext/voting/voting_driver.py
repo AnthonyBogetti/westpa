@@ -66,6 +66,7 @@ class VotingDriver:
             df = pd.DataFrame.from_dict(data)
             #            print(df.head)
             pct_change = df.pct_change(periods=pcoord_len - 1)
+            # print(pct_change)
             pct_change *= self.pct_change_direct
             # sorted_list = pct_change.iloc[-1].sort_values(ascending=False)
             #            print(sorted_list)
@@ -99,7 +100,7 @@ class VotingDriver:
             new_pcoord = new_pcoord.reshape(pcoord_len, 1)
             combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
             segments[idx].pcoord = combined_pcoord
-            print(idx, segments[idx].pcoord)
+            # print(idx, segments[idx].pcoord)
 
 
 #    def dfunc(self):
