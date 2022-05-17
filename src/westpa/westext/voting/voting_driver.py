@@ -82,8 +82,8 @@ class VotingDriver:
 
         data_names = list(segments[0].data)
         print("voting results:")
-        for vote in votes:
-            print(data_names[int(vote)])
+        for vidx, vote in enumerate(votes):
+            print(data_names[int(vote)], weights[vidx])
 
         if not self.use_weights:
             weights = np.ones(len(segments))
