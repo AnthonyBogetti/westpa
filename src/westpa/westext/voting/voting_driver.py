@@ -73,7 +73,6 @@ class VotingDriver:
         for vidx, vote in enumerate(votes):
             vote_names.append(data_names[int(vote)])
             print(data_names[int(vote)], weights[vidx])
-        print("vote names", vote_names)
         vote_names = np.array(vote_names)
 
         if not self.use_weights:
