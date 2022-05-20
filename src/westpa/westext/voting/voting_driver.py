@@ -34,8 +34,6 @@ class VotingDriver:
         self.use_weights = plugin_config.get('use_weights', False)
         # whether to use the log of the weights
         self.log_weights = plugin_config.get('log_weights', False)
-        # whether to use one final vote instead of a combination
-        self.one_vote = plugin_config.get('one_vote', False)
         # directional indicators
         self.pct_change_direct = plugin_config.get('pct_change_direct', None)
         # decision equation to apply to votes
@@ -67,18 +65,20 @@ class VotingDriver:
             else:
                 weights[idx] = weight
 
-        data_names = list(segments[0].data)
-        vote_names = []
-        print("voting results:")
-        for vidx, vote in enumerate(votes):
-            vote_names.append(data_names[int(vote)])
-            print(data_names[int(vote)], weights[vidx])
-        vote_names = np.array(vote_names)
-
         if not self.use_weights:
             weights = np.ones(len(segments))
 
-        if self.one_vote:
+        data_names = list(segments[0].data)
+        vote_names = []
+
+        if self.decision_eq == "voting" or self.decision_eq == "onevote":
+            print("voting results:")
+            for vidx, vote in enumerate(votes):
+                vote_names.append(data_names[int(vote)])
+                print(data_names[int(vote)], weights[vidx])
+            vote_names = np.array(vote_names)
+
+        if self.decision_eq == "onevote":
             counter = Counter(vote_names)
             names = list(counter.keys())
             sum_weights = np.zeros((len(names)))
@@ -98,13 +98,33 @@ class VotingDriver:
                 new_pcoord = new_pcoord.reshape(pcoord_len, 1)
                 combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
                 segments[idx].pcoord = combined_pcoord
-        else:
+        elif self.decision_eq == "voting":
             for idx in segments:
                 new_pcoord = 0
                 data_names = list(segments[idx].data)
                 for ivote, vote in enumerate(votes):
                     vote_name = data_names[int(vote)]
                     new_pcoord += segments[idx].data[vote_name] * weights[ivote]
+                old_pcoord = segments[idx].pcoord[:, 1].reshape(pcoord_len, 1)
+                new_pcoord = new_pcoord.reshape(pcoord_len, 1)
+                combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
+                segments[idx].pcoord = combined_pcoord
+        elif self.decision_eq == "linear":
+            for idx in segments:
+                new_pcoord = 0
+                data_names = list(segments[idx].data)
+                for iname, name in enumerate(data_names):
+                    new_pcoord += segments[idx].data[name] * weights[idx]
+                old_pcoord = segments[idx].pcoord[:, 1].reshape(pcoord_len, 1)
+                new_pcoord = new_pcoord.reshape(pcoord_len, 1)
+                combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
+                segments[idx].pcoord = combined_pcoord
+        elif self.decision_eq == "linearpc":
+            for idx in segments:
+                new_pcoord = 0
+                data_names = list(segments[idx].data)
+                for iname, name in enumerate(data_names):
+                    new_pcoord += segments[idx].data[name] * weights[idx]
                 old_pcoord = segments[idx].pcoord[:, 1].reshape(pcoord_len, 1)
                 new_pcoord = new_pcoord.reshape(pcoord_len, 1)
                 combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
