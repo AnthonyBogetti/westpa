@@ -119,12 +119,13 @@ class VotingDriver:
                 new_pcoord = new_pcoord.reshape(pcoord_len, 1)
                 combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
                 segments[idx].pcoord = combined_pcoord
-        elif self.decision_eq == "linearpc":
+        elif self.decision_eq == "compressed":
             for idx in segments:
                 new_pcoord = 0
                 data_names = list(segments[idx].data)
                 for iname, name in enumerate(data_names):
-                    new_pcoord += segments[idx].data[name] * weights[idx]
+                    new_pcoord += (segments[idx].data[name] * weights[idx]) ** 2
+                new_pcoord = np.sqrt(new_pcoord)
                 old_pcoord = segments[idx].pcoord[:, 1].reshape(pcoord_len, 1)
                 new_pcoord = new_pcoord.reshape(pcoord_len, 1)
                 combined_pcoord = np.concatenate((new_pcoord, old_pcoord), axis=1)
