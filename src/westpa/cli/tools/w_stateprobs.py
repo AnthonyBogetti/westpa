@@ -1,5 +1,4 @@
 from westpa.tools import WESTMasterCommand, WESTParallelTool
-from warnings import warn
 
 from westpa.cli.tools.w_direct import DStateProbs
 
@@ -95,7 +94,7 @@ Command-line options
 
 
 def entry_point():
-    warn('{} is being deprecated.  Please use w_direct instead.'.format(WDirect.prog))
+    print('WARNING: {} is being deprecated.  Please use w_direct instead.'.format(WDirect.prog))
     # If we're not really supporting subcommands...
     import sys
 

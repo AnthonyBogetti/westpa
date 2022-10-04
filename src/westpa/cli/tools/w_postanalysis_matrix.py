@@ -1,5 +1,4 @@
 from westpa.tools import WESTMasterCommand, WESTParallelTool
-from warnings import warn
 
 from westpa.cli.tools.w_reweight import RWMatrix
 
@@ -66,7 +65,7 @@ Command-line options
 
 
 def entry_point():
-    warn('{} is being deprecated.  Please use w_reweight instead.'.format(WReweight.prog))
+    print('WARNING: {} is being deprecated.  Please use w_reweight instead.'.format(WReweight.prog))
     # If we're not really supporting subcommands...
     import sys
 

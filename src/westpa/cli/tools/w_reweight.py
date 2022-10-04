@@ -772,7 +772,6 @@ class WReweight(WESTMasterCommand, WESTParallelTool):
 
 
 def entry_point():
-    warnings.warn('{} is being deprecated.  Please use WESS, WEED or the haMSM plugin instead.'.format(WReweight.prog))
     WReweight().main()
 
 
